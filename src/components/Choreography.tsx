@@ -5,178 +5,181 @@ import { sceneState } from '../store/sceneState'
 
 gsap.registerPlugin(ScrollTrigger)
 
+// HMR safety: kill the stale trigger set before the updated module registers
+// a new one — otherwise every hot update stacks duplicates over dead tweens.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    ScrollTrigger.getAll().forEach((t) => t.kill())
+  })
+}
+
+const FOV = 35
+const WORK_CAM_Z = 6.2
+
+/**
+ * Parked column x, computed from the camera frustum so the shard's whole body
+ * sits inside one half of the screen at any viewport. halfW is the frustum
+ * half-width at the shard plane; 0.52 parks the CENTER 52% toward the edge.
+ */
+function side() {
+  const aspect = window.innerWidth / window.innerHeight
+  const halfW = Math.tan(((FOV / 2) * Math.PI) / 180) * WORK_CAM_Z * aspect
+  return halfW * 0.52
+}
+
 /**
  * Scroll choreography. Every trigger tweens the plain sceneState object only —
- * the R3F frame loop lerps the real scene toward it (scrub + frame lerp 0.08 =
- * double smoothing). Poses are explicit and transitions use fromTo, so
- * scrubbing backwards is fully deterministic.
+ * the R3F frame loop lerps the real scene toward it. All segments are pure
+ * .to() so they start from live current values and survive jump-ins, resize
+ * and back-scrubbing. The shard's WORK journey has exactly ONE owner timeline.
  */
-
-type Pose = {
-  shard: { x: number; y: number; z: number; scale: number; rotY: number }
-  cam: { x: number; y: number; z: number }
-  uniforms: { uAmp: number; uFreq: number; uRim: number }
-}
-
-const POSES: Record<string, Pose> = {
-  hero: {
-    shard: { x: 0, y: -0.2, z: 0, scale: 1, rotY: 0 },
-    cam: { x: 0, y: 0, z: 6 },
-    uniforms: { uAmp: 0.18, uFreq: 1.6, uRim: 0.5 },
-  },
-  studio: {
-    shard: { x: 1.6, y: 0, z: 0, scale: 0.85, rotY: 0 },
-    cam: { x: -0.6, y: 0.3, z: 5 },
-    uniforms: { uAmp: 0.1, uFreq: 2.4, uRim: 0.3 },
-  },
-  // work: the shard swaps sides between rows, flipping half a turn per crossing
-  work0: {
-    shard: { x: 1.7, y: 0.05, z: -0.4, scale: 0.8, rotY: Math.PI },
-    cam: { x: 0, y: 0, z: 6.2 },
-    uniforms: { uAmp: 0.07, uFreq: 2.4, uRim: 0.25 },
-  },
-  work1: {
-    shard: { x: -1.7, y: 0.05, z: -0.4, scale: 0.8, rotY: Math.PI * 2 },
-    cam: { x: 0, y: 0, z: 6.2 },
-    uniforms: { uAmp: 0.07, uFreq: 2.4, uRim: 0.25 },
-  },
-  work2: {
-    shard: { x: 1.7, y: 0.05, z: -0.4, scale: 0.8, rotY: Math.PI * 3 },
-    cam: { x: 0, y: 0, z: 6.2 },
-    uniforms: { uAmp: 0.07, uFreq: 2.4, uRim: 0.25 },
-  },
-  process: {
-    shard: { x: 0, y: 0, z: 0, scale: 1.15, rotY: Math.PI * 4 },
-    cam: { x: 0, y: 1.8, z: 4.2 },
-    uniforms: { uAmp: 0.55, uFreq: 3.4, uRim: 0.8 },
-  },
-  contact: {
-    shard: { x: 0, y: -0.1, z: 0.5, scale: 1, rotY: Math.PI * 4 },
-    cam: { x: 0, y: 0, z: 5 },
-    uniforms: { uAmp: 0.14, uFreq: 1.2, uRim: 1.0 },
-  },
-}
-
-function poseTransition(
-  trigger: string | Element,
-  from: Pose,
-  to: Pose,
-  opts: { start: string; end: string; arc?: boolean },
-) {
-  const scrollTrigger = {
-    trigger,
-    start: opts.start,
-    end: opts.end,
-    scrub: 1.2,
-  }
-  const common = { ease: 'none' as const, immediateRender: false }
-
-  if (opts.arc) {
-    // crossing move: rise + swell at the midpoint, land on the far side —
-    // reads as the object being picked up and carried across.
-    // NOTE: gsap keyframes only work in to() vars, so this is two segments.
-    const mid = {
-      x: (from.shard.x + to.shard.x) / 2,
-      y: from.shard.y + 0.55,
-      z: from.shard.z - 0.3,
-      scale: from.shard.scale * 1.12,
-      rotY: (from.shard.rotY + to.shard.rotY) / 2,
-    }
-    gsap
-      .timeline({ scrollTrigger, defaults: common })
-      .fromTo(sceneState.shard, { ...from.shard }, { ...mid, duration: 0.5 }, 0)
-      .to(sceneState.shard, { ...to.shard, duration: 0.5, ease: 'none' }, 0.5)
-      .fromTo(sceneState.cam, { ...from.cam }, { ...to.cam, duration: 1 }, 0)
-      .fromTo(sceneState, { ...from.uniforms }, { ...to.uniforms, duration: 1 }, 0)
-  } else {
-    gsap
-      .timeline({ scrollTrigger, defaults: common })
-      .fromTo(sceneState.shard, { ...from.shard }, { ...to.shard }, 0)
-      .fromTo(sceneState.cam, { ...from.cam }, { ...to.cam }, 0)
-      .fromTo(sceneState, { ...from.uniforms }, { ...to.uniforms }, 0)
-  }
-}
-
 export default function Choreography() {
   useEffect(() => {
-    const mm = gsap.matchMedia()
+    const ctx = gsap.context(() => {
+      const mm = gsap.matchMedia()
 
-    mm.add('(prefers-reduced-motion: no-preference)', () => {
-      // global: progress readout + the slow full-page tumble (rotX / rotZ)
-      gsap.timeline({
-        scrollTrigger: {
-          trigger: '#main',
-          start: 'top top',
-          end: 'bottom bottom',
-          scrub: 1.2,
-          onUpdate: (self) => {
-            sceneState.progress = self.progress
-            const readout = document.getElementById('scroll-progress')
-            if (readout) {
-              readout.textContent = String(Math.round(self.progress * 100)).padStart(3, '0')
-            }
+      mm.add('(prefers-reduced-motion: no-preference)', () => {
+        // ---- master: progress readout + slow rotZ tumble (rotZ ONLY) ----
+        gsap.timeline({
+          scrollTrigger: {
+            trigger: '#main',
+            start: 'top top',
+            end: 'bottom bottom',
+            scrub: 1.2,
+            onUpdate: (self) => {
+              sceneState.progress = self.progress
+              const readout = document.getElementById('scroll-progress')
+              if (readout) {
+                readout.textContent = String(Math.round(self.progress * 100)).padStart(3, '0')
+              }
+            },
           },
-        },
-        defaults: { ease: 'none' },
-      }).fromTo(
-        sceneState.shard,
-        { rotX: 0, rotZ: 0 },
-        { rotX: Math.PI * 1.5, rotZ: -Math.PI * 0.5 },
-        0,
-      )
+          defaults: { ease: 'none' },
+        }).to(sceneState.shard, { rotZ: -Math.PI * 0.5 }, 0)
 
-      // section transitions
-      poseTransition('#studio', POSES.hero, POSES.studio, {
-        start: 'top 95%',
-        end: 'top 15%',
-      })
+        // ---- studio entry ----
+        gsap
+          .timeline({
+            scrollTrigger: { trigger: '#studio', start: 'top 95%', end: 'top 15%', scrub: 1.2 },
+            defaults: { ease: 'none' },
+          })
+          .to(sceneState.shard, { x: 1.6, y: 0, z: 0, scale: 0.85, duration: 1 }, 0)
+          .to(sceneState.cam, { x: -0.6, y: 0.3, z: 5, duration: 1 }, 0)
+          .to(sceneState, { uAmp: 0.1, uFreq: 2.4, uRim: 0.3, duration: 1 }, 0)
 
-      const rows = gsap.utils.toArray<HTMLElement>('[data-wrow]')
-      const workPoses = [POSES.work0, POSES.work1, POSES.work2]
-      rows.forEach((row, i) => {
-        poseTransition(row, i === 0 ? POSES.studio : workPoses[i - 1], workPoses[i], {
-          start: 'top 90%',
-          end: 'top 25%',
-          arc: i > 0, // crossings get the carry-arc; entering the section doesn't
+        // ---- WORK: one timeline owns the shard for the whole section ----
+        const work = gsap.timeline({
+          scrollTrigger: {
+            trigger: '#work',
+            start: 'top 70%',
+            end: 'bottom 60%',
+            scrub: 1,
+            invalidateOnRefresh: true,
+          },
+          defaults: { ease: 'none' },
         })
+
+        // enter: park RIGHT beside IONFIELD
+        work
+          .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
+          .to(sceneState.cam, { x: 0, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+          .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
+          // hold 1 — explicit hold keeps playhead ownership
+          .to(sceneState.shard, { x: () => side(), duration: 1 })
+          // crossing 1: rise-flip-carry to the LEFT (full 360° across the carry)
+          .to(sceneState.shard, {
+            x: 0,
+            y: 0.95,
+            z: 0.6,
+            scale: 0.94,
+            rotY: '+=' + Math.PI,
+            duration: 0.8,
+          })
+          .to(sceneState, { uRim: 0.7, duration: 0.8 }, '<')
+          .to(sceneState.shard, {
+            x: () => -side(),
+            y: 0.05,
+            z: 0,
+            scale: 0.8,
+            rotY: '+=' + Math.PI,
+            duration: 0.8,
+          })
+          .to(sceneState, { uRim: 0.25, duration: 0.8 }, '<')
+          // hold 2 — LEFT beside HALFTONE
+          .to(sceneState.shard, { x: () => -side(), duration: 1 })
+          // crossing 2: carry back RIGHT
+          .to(sceneState.shard, {
+            x: 0,
+            y: 0.95,
+            z: 0.6,
+            scale: 0.94,
+            rotY: '+=' + Math.PI,
+            duration: 0.8,
+          })
+          .to(sceneState, { uRim: 0.7, duration: 0.8 }, '<')
+          .to(sceneState.shard, {
+            x: () => side(),
+            y: 0.05,
+            z: 0,
+            scale: 0.8,
+            rotY: '+=' + Math.PI,
+            duration: 0.8,
+          })
+          .to(sceneState, { uRim: 0.25, duration: 0.8 }, '<')
+          // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
+          .to(sceneState.shard, { x: () => side(), duration: 1 })
+
+        // ---- process: THE PEAK (starts from live values, not hard-coded) ----
+        gsap
+          .timeline({
+            scrollTrigger: { trigger: '#process', start: 'top 95%', end: 'top 15%', scrub: 1.2 },
+            defaults: { ease: 'none' },
+          })
+          .to(sceneState.shard, { x: 0, y: 0, z: 0, scale: 1.15, duration: 1 }, 0)
+          .to(sceneState.cam, { x: 0, y: 1.8, z: 4.2, duration: 1 }, 0)
+          .to(sceneState, { uAmp: 0.55, uFreq: 3.4, uRim: 0.8, duration: 1 }, 0)
+
+        // process words arrive on the scrub as the shard churns (DOM only)
+        const words = gsap.utils.toArray<HTMLElement>('[data-pword]')
+        const wordsTl = gsap.timeline({
+          scrollTrigger: { trigger: '#process', start: 'top 70%', end: 'center 40%', scrub: 1.2 },
+          defaults: { ease: 'none' },
+        })
+        words.forEach((word, i) => {
+          wordsTl.fromTo(
+            word,
+            { opacity: 0.08, y: 14 },
+            { opacity: 1, y: 0, duration: 0.2 },
+            i * 0.22,
+          )
+        })
+
+        // ---- contact: settle, rim to full ember ----
+        gsap
+          .timeline({
+            scrollTrigger: { trigger: '#contact', start: 'top 95%', end: 'top 20%', scrub: 1.2 },
+            defaults: { ease: 'none' },
+          })
+          .to(sceneState.shard, { x: 0, y: -0.1, z: 0.5, scale: 1, duration: 1 }, 0)
+          .to(sceneState.cam, { x: 0, y: 0, z: 5, duration: 1 }, 0)
+          .to(sceneState, { uAmp: 0.14, uFreq: 1.2, uRim: 1.0, duration: 1 }, 0)
       })
 
-      poseTransition('#process', POSES.work2, POSES.process, {
-        start: 'top 95%',
-        end: 'top 15%',
+      mm.add('(prefers-reduced-motion: reduce)', () => {
+        // shard sits in the hero pose with idle drift only
+        sceneState.uAmp = 0.1
+        gsap.set('[data-pword]', { opacity: 1, y: 0 })
       })
-      poseTransition('#contact', POSES.process, POSES.contact, {
-        start: 'top 95%',
-        end: 'top 20%',
-      })
-
-      // process words arrive on the scrub as the shard churns
-      const words = gsap.utils.toArray<HTMLElement>('[data-pword]')
-      const wordsTl = gsap.timeline({
-        scrollTrigger: {
-          trigger: '#process',
-          start: 'top 70%',
-          end: 'center 40%',
-          scrub: 1.2,
-        },
-        defaults: { ease: 'none' },
-      })
-      words.forEach((word, i) => {
-        wordsTl.fromTo(word, { opacity: 0.08, y: 14 }, { opacity: 1, y: 0, duration: 0.2 }, i * 0.22)
-      })
-
-      return () => {
-        ScrollTrigger.getAll().forEach((st) => st.kill())
-      }
     })
 
-    mm.add('(prefers-reduced-motion: reduce)', () => {
-      // shard sits in the hero pose with idle drift only
-      sceneState.uAmp = 0.1
-      gsap.set('[data-pword]', { opacity: 1, y: 0 })
-    })
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).__ST = ScrollTrigger
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).__scene = sceneState
+    }
 
-    return () => mm.revert()
+    return () => ctx.revert()
   }, [])
 
   return null

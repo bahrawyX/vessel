@@ -49,6 +49,7 @@ export default function Preloader({ onDone }: { onDone: () => void }) {
         onComplete: () => {
           getLenis()?.start()
           ScrollTrigger.refresh()
+          ScrollTrigger.update()
           onDone()
         },
       })

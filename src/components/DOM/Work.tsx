@@ -38,22 +38,29 @@ export default function Work() {
     const ctx = gsap.context(() => {
       const mm = gsap.matchMedia()
       mm.add('(prefers-reduced-motion: no-preference)', () => {
-        gsap.utils.toArray<HTMLElement>('[data-card]').forEach((card) => {
+        // DOM beat synced to each crossing: the upcoming card slides in from
+        // its own side and settles as the shard lands opposite it.
+        // DOM only — never touches sceneState.
+        gsap.utils.toArray<HTMLElement>('[data-card]').forEach((card, i) => {
           gsap.fromTo(
             card,
-            { y: 40, opacity: 0 },
+            { opacity: 0.4, x: i % 2 === 1 ? 40 : -40 },
             {
-              y: 0,
               opacity: 1,
-              duration: 1.1,
-              ease: 'expo.out',
-              scrollTrigger: { trigger: card, start: 'top 80%', once: true },
+              x: 0,
+              ease: 'none',
+              scrollTrigger: {
+                trigger: card.parentElement,
+                start: 'top 80%',
+                end: 'top 40%',
+                scrub: 1,
+              },
             },
           )
         })
       })
       mm.add('(prefers-reduced-motion: reduce)', () => {
-        gsap.set('[data-card]', { opacity: 1, y: 0 })
+        gsap.set('[data-card]', { opacity: 1, x: 0 })
       })
     }, rootRef)
     return () => ctx.revert()
@@ -75,7 +82,9 @@ export default function Work() {
         </div>
       </div>
 
-      {/* alternating rows: card on one side, the shard crosses to the other */}
+      {/* alternating rows: card on one side, the shard crosses to the other.
+          Extra lg spacing gives each carry ≥70vh of scroll to breathe. */}
+      <div className="lg:space-y-[38vh]">
       {PROJECTS.map((project, i) => (
         <div
           key={project.index}
@@ -86,7 +95,7 @@ export default function Work() {
             data-card
             onMouseEnter={rimUp}
             onMouseLeave={rimDown}
-            className={`w-full lg:w-[46%] ${i % 2 === 1 ? 'lg:ml-auto' : ''}`}
+            className={`w-full lg:w-[46%] ${i % 2 === 1 ? 'lg:ml-auto' : 'lg:mr-auto'}`}
           >
             <div className="group aspect-[16/10] cursor-pointer overflow-hidden rounded-lg bg-[#141419]">
               <video
@@ -113,6 +122,7 @@ export default function Work() {
           </article>
         </div>
       ))}
+      </div>
     </section>
   )
 }

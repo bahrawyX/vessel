@@ -31,7 +31,10 @@ export function useLenisGsap() {
     gsap.ticker.add(tick)
     gsap.ticker.lagSmoothing(0)
 
-    document.fonts.ready.then(() => ScrollTrigger.refresh())
+    document.fonts.ready.then(() => {
+      ScrollTrigger.refresh()
+      ScrollTrigger.update()
+    })
 
     return () => {
       gsap.ticker.remove(tick)
