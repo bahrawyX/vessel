@@ -16,6 +16,12 @@ export const sceneState = {
     rotZ: 0,
   },
   cam: { x: 0, y: 0, z: 6 },
+  /**
+   * Where the camera LOOKS — decoupled from the shard. If the camera aimed at
+   * the shard itself, it would rotate to re-center it and cancel every lateral
+   * move on screen (the work-section column bug).
+   */
+  camTarget: { x: 0, y: -0.2, z: 0 },
   uAmp: 0.18,
   uFreq: 1.6,
   uRim: 0.5,

@@ -65,6 +65,7 @@ export default function Choreography() {
           })
           .to(sceneState.shard, { x: 1.6, y: 0, z: 0, scale: 0.85, duration: 1 }, 0)
           .to(sceneState.cam, { x: -0.6, y: 0.3, z: 5, duration: 1 }, 0)
+          .to(sceneState.camTarget, { x: 1.6, y: 0, z: 0, duration: 1 }, 0)
           .to(sceneState, { uAmp: 0.1, uFreq: 2.4, uRim: 0.3, duration: 1 }, 0)
 
         // ---- WORK: one timeline owns the shard for the whole section ----
@@ -79,55 +80,36 @@ export default function Choreography() {
           defaults: { ease: 'none' },
         })
 
-        // enter: park RIGHT beside IONFIELD
+        // Explicit positions: enter [0-0.6], hold1 [0.6-1.6], cross1 [1.6-3.2],
+        // hold2 [3.2-4.2], cross2 [4.2-5.8], hold3 [5.8-6.8].
+        // camTarget is PINNED at center for the whole section — the camera must
+        // not look at the shard here or it re-centers it and kills the columns.
+        // cam.x counter-pans slightly opposite the shard to push it deeper
+        // into its column.
         work
+          // enter: park RIGHT beside IONFIELD
           .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
-          .to(sceneState.cam, { x: 0, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+          .to(sceneState.cam, { x: () => -side() * 0.18, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+          .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 0.6 }, 0)
           .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
           // hold 1 — explicit hold keeps playhead ownership
-          .to(sceneState.shard, { x: () => side(), duration: 1 })
+          .to(sceneState.shard, { x: () => side(), duration: 1 }, 0.6)
           // crossing 1: rise-flip-carry to the LEFT (full 360° across the carry)
-          .to(sceneState.shard, {
-            x: 0,
-            y: 0.95,
-            z: 0.6,
-            scale: 0.94,
-            rotY: '+=' + Math.PI,
-            duration: 0.8,
-          })
-          .to(sceneState, { uRim: 0.7, duration: 0.8 }, '<')
-          .to(sceneState.shard, {
-            x: () => -side(),
-            y: 0.05,
-            z: 0,
-            scale: 0.8,
-            rotY: '+=' + Math.PI,
-            duration: 0.8,
-          })
-          .to(sceneState, { uRim: 0.25, duration: 0.8 }, '<')
+          .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 1.6)
+          .to(sceneState, { uRim: 0.7, duration: 0.8 }, 1.6)
+          .to(sceneState.cam, { x: () => side() * 0.18, duration: 1.6 }, 1.6)
+          .to(sceneState.shard, { x: () => -side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 2.4)
+          .to(sceneState, { uRim: 0.25, duration: 0.8 }, 2.4)
           // hold 2 — LEFT beside HALFTONE
-          .to(sceneState.shard, { x: () => -side(), duration: 1 })
+          .to(sceneState.shard, { x: () => -side(), duration: 1 }, 3.2)
           // crossing 2: carry back RIGHT
-          .to(sceneState.shard, {
-            x: 0,
-            y: 0.95,
-            z: 0.6,
-            scale: 0.94,
-            rotY: '+=' + Math.PI,
-            duration: 0.8,
-          })
-          .to(sceneState, { uRim: 0.7, duration: 0.8 }, '<')
-          .to(sceneState.shard, {
-            x: () => side(),
-            y: 0.05,
-            z: 0,
-            scale: 0.8,
-            rotY: '+=' + Math.PI,
-            duration: 0.8,
-          })
-          .to(sceneState, { uRim: 0.25, duration: 0.8 }, '<')
+          .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 4.2)
+          .to(sceneState, { uRim: 0.7, duration: 0.8 }, 4.2)
+          .to(sceneState.cam, { x: () => -side() * 0.18, duration: 1.6 }, 4.2)
+          .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 5)
+          .to(sceneState, { uRim: 0.25, duration: 0.8 }, 5)
           // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
-          .to(sceneState.shard, { x: () => side(), duration: 1 })
+          .to(sceneState.shard, { x: () => side(), duration: 1 }, 5.8)
 
         // ---- process: THE PEAK (starts from live values, not hard-coded) ----
         gsap
@@ -137,6 +119,7 @@ export default function Choreography() {
           })
           .to(sceneState.shard, { x: 0, y: 0, z: 0, scale: 1.15, duration: 1 }, 0)
           .to(sceneState.cam, { x: 0, y: 1.8, z: 4.2, duration: 1 }, 0)
+          .to(sceneState.camTarget, { x: 0, y: 0, z: 0, duration: 1 }, 0)
           .to(sceneState, { uAmp: 0.55, uFreq: 3.4, uRim: 0.8, duration: 1 }, 0)
 
         // process words arrive on the scrub as the shard churns (DOM only)
@@ -162,6 +145,7 @@ export default function Choreography() {
           })
           .to(sceneState.shard, { x: 0, y: -0.1, z: 0.5, scale: 1, duration: 1 }, 0)
           .to(sceneState.cam, { x: 0, y: 0, z: 5, duration: 1 }, 0)
+          .to(sceneState.camTarget, { x: 0, y: -0.1, z: 0.5, duration: 1 }, 0)
           .to(sceneState, { uAmp: 0.14, uFreq: 1.2, uRim: 1.0, duration: 1 }, 0)
       })
 

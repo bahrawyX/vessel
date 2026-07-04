@@ -29,7 +29,11 @@ export default function SceneCanvas() {
         gl={{ antialias: true, powerPreference: 'high-performance' }}
         camera={{ fov: 35, position: [0, 0, 6] }}
         frameloop="never"
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene, camera }) => {
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ;(window as any).__vessel = { scene, camera }
+          }
           // allow the browser to restore a lost context instead of killing the scene
           gl.domElement.addEventListener(
             'webglcontextlost',

@@ -16,6 +16,10 @@ export function useLenisGsap() {
   useEffect(() => {
     const lenis = new Lenis({ lerp: 0.09, smoothWheel: true })
     lenisInstance = lenis
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).__lenis = lenis
+    }
 
     lenis.on('scroll', (e: { velocity: number }) => {
       ScrollTrigger.update()

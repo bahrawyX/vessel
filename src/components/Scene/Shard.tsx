@@ -17,6 +17,7 @@ export default function Shard({ fine, mobile }: { fine: boolean; mobile: boolean
   const driftGroup = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null!)
   const hovering = useRef(false)
+  const lookTarget = useRef(new THREE.Vector3(0, -0.2, 0))
 
   const uniforms = useMemo(
     () => ({
@@ -65,12 +66,17 @@ export default function Shard({ fine, mobile }: { fine: boolean; mobile: boolean
     uniforms.uFreq.value += (s.uFreq - uniforms.uFreq.value) * LERP
     uniforms.uRim.value += (s.uRim + s.rimBoost - uniforms.uRim.value) * LERP
 
-    // camera: lerp toward target, always looking at the shard
+    // camera: lerp position AND aim toward their own targets — the aim is
+    // deliberately NOT the shard, so lateral shots read on screen
     const cam = state.camera
     cam.position.x += (s.cam.x - cam.position.x) * LERP
     cam.position.y += (s.cam.y - cam.position.y) * LERP
     cam.position.z += (s.cam.z - cam.position.z) * LERP
-    cam.lookAt(g.position)
+    const t = lookTarget.current
+    t.x += (s.camTarget.x - t.x) * LERP
+    t.y += (s.camTarget.y - t.y) * LERP
+    t.z += (s.camTarget.z - t.z) * LERP
+    cam.lookAt(t)
   })
 
   const onPointerMove = (e: { point: THREE.Vector3 }) => {
