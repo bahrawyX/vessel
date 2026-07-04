@@ -72,24 +72,22 @@ function poseTransition(
   const common = { ease: 'none' as const, immediateRender: false }
 
   if (opts.arc) {
-    // crossing move: rise + shrink at the midpoint, land on the far side —
-    // reads as the object being picked up and carried across
+    // crossing move: rise + swell at the midpoint, land on the far side —
+    // reads as the object being picked up and carried across.
+    // NOTE: gsap keyframes only work in to() vars, so this is two segments.
+    const mid = {
+      x: (from.shard.x + to.shard.x) / 2,
+      y: from.shard.y + 0.55,
+      z: from.shard.z - 0.3,
+      scale: from.shard.scale * 1.12,
+      rotY: (from.shard.rotY + to.shard.rotY) / 2,
+    }
     gsap
       .timeline({ scrollTrigger, defaults: common })
-      .fromTo(sceneState.shard, { ...from.shard }, {
-        keyframes: [
-          {
-            x: (from.shard.x + to.shard.x) / 2,
-            y: from.shard.y + 0.55,
-            z: from.shard.z - 0.3,
-            scale: from.shard.scale * 1.12,
-            rotY: (from.shard.rotY + to.shard.rotY) / 2,
-          },
-          { ...to.shard },
-        ],
-      }, 0)
-      .fromTo(sceneState.cam, { ...from.cam }, { ...to.cam }, 0)
-      .fromTo(sceneState, { ...from.uniforms }, { ...to.uniforms }, 0)
+      .fromTo(sceneState.shard, { ...from.shard }, { ...mid, duration: 0.5 }, 0)
+      .to(sceneState.shard, { ...to.shard, duration: 0.5, ease: 'none' }, 0.5)
+      .fromTo(sceneState.cam, { ...from.cam }, { ...to.cam, duration: 1 }, 0)
+      .fromTo(sceneState, { ...from.uniforms }, { ...to.uniforms, duration: 1 }, 0)
   } else {
     gsap
       .timeline({ scrollTrigger, defaults: common })
