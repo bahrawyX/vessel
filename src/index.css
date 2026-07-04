@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #0b0b0f;
+  --bone: #edeae3;
+  --dim: #7f7c74;
+  --line: #232228;
+  --ember: #ff5c38;
+}
+
+body {
+  background: var(--ink);
+  color: var(--bone);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 400;
+  font-stretch: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--ember);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}
+
+/* ---- Type voices ---- */
+.type-display {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 600;
+  font-stretch: 87%;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.type-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ---- Film grain: steps() flicker ---- */
+@keyframes grain-flicker {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 256px 256px;
+  }
+}
+
+.grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.045;
+  mix-blend-mode: overlay;
+  animation: grain-flicker 0.6s steps(8) infinite;
+}
+
+/* ---- Hero scroll cue line ---- */
+@keyframes cue-line {
+  0%,
+  100% {
+    transform: scaleY(0);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.cue-line {
+  transform-origin: top;
+  animation: cue-line 1.6s ease-in-out infinite;
+}
+
+/* ---- Preloader dots ---- */
+@keyframes dot-blink {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
+.loading-dot {
+  animation: dot-blink 1.2s infinite;
+}
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* ---- Footer social underline ---- */
+.underline-link {
+  position: relative;
+}
+.underline-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 1px;
+  background: var(--bone);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.underline-link:hover::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain,
+  .cue-line,
+  .loading-dot {
+    animation: none;
+  }
+}
