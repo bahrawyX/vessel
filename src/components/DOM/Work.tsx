@@ -83,13 +83,14 @@ export default function Work() {
       </div>
 
       {/* alternating rows: card on one side, the shard crosses to the other.
-          Extra lg spacing gives each carry ≥70vh of scroll to breathe. */}
-      <div className="lg:space-y-[38vh]">
+          Spacing is viewport-relative at ALL widths so every crossing owns
+          real scroll distance on small screens too (no whip-throughs). */}
+      <div className="space-y-[30svh]">
       {PROJECTS.map((project, i) => (
         <div
           key={project.index}
           data-wrow={i}
-          className="flex min-h-[100svh] items-center px-6 sm:px-10"
+          className="flex min-h-[100svh] flex-col justify-center px-6 sm:px-10"
         >
           <article
             data-card

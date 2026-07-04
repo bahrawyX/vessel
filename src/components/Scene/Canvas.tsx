@@ -8,7 +8,8 @@ import { useMedia } from '../../hooks/useMedia'
 
 export default function SceneCanvas() {
   const fine = useMedia('(pointer: fine)')
-  const mobile = useMedia('(max-width: 767px)')
+  // under 1024px: 48-subdivision geometry, no ChromaticAberration, dpr ≤ 1.5
+  const mobile = useMedia('(max-width: 1023px)')
   const [dpr, setDpr] = useState(mobile ? 1.5 : 2)
 
   // one clock for everything: gsap.ticker drives Lenis, ScrollTrigger AND the

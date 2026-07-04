@@ -38,7 +38,17 @@ export default function Choreography() {
     const ctx = gsap.context(() => {
       const mm = gsap.matchMedia()
 
-      mm.add('(prefers-reduced-motion: no-preference)', () => {
+      mm.add(
+        {
+          noPref: '(prefers-reduced-motion: no-preference)',
+          small: '(max-width: 1023px)',
+        },
+        (ctx) => {
+        if (!ctx.conditions?.noPref) return
+        // small screens compress the scroll span — tighter scrub tracking
+        // keeps a fast flick from replaying a whole crossing as a whip.
+        // The choreography itself is identical at every width.
+        const workScrub = ctx.conditions?.small ? 0.6 : 1
         // ---- master: progress readout + slow rotZ tumble (rotZ ONLY) ----
         gsap.timeline({
           scrollTrigger: {
@@ -74,7 +84,7 @@ export default function Choreography() {
             trigger: '#work',
             start: 'top 70%',
             end: 'bottom 60%',
-            scrub: 1,
+            scrub: workScrub,
             invalidateOnRefresh: true,
           },
           defaults: { ease: 'none' },
@@ -111,10 +121,18 @@ export default function Choreography() {
           // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
           .to(sceneState.shard, { x: () => side(), duration: 1 }, 5.8)
 
-        // ---- process: THE PEAK (starts from live values, not hard-coded) ----
-        gsap
+        // ---- process: THE PEAK. Pure .to() from live values; range starts
+        // exactly where the work timeline ends — zero unowned pixels. ----
+        const workST = work.scrollTrigger!
+        const processTl = gsap
           .timeline({
-            scrollTrigger: { trigger: '#process', start: 'top 95%', end: 'top 15%', scrub: 1.2 },
+            scrollTrigger: {
+              trigger: '#process',
+              start: () => workST.end,
+              end: () => workST.end + window.innerHeight * 0.8,
+              scrub: 1.2,
+              invalidateOnRefresh: true,
+            },
             defaults: { ease: 'none' },
           })
           .to(sceneState.shard, { x: 0, y: 0, z: 0, scale: 1.15, duration: 1 }, 0)
@@ -137,17 +155,26 @@ export default function Choreography() {
           )
         })
 
-        // ---- contact: settle, rim to full ember ----
+        // ---- contact: settle, rim to full ember. Range is contiguous with
+        // process — starts at exactly processST.end, no gap, no overlap. ----
+        const processST = processTl.scrollTrigger!
         gsap
           .timeline({
-            scrollTrigger: { trigger: '#contact', start: 'top 95%', end: 'top 20%', scrub: 1.2 },
+            scrollTrigger: {
+              trigger: '#contact',
+              start: () => processST.end,
+              end: () => processST.end + window.innerHeight * 0.75,
+              scrub: 1.2,
+              invalidateOnRefresh: true,
+            },
             defaults: { ease: 'none' },
           })
           .to(sceneState.shard, { x: 0, y: -0.1, z: 0.5, scale: 1, duration: 1 }, 0)
           .to(sceneState.cam, { x: 0, y: 0, z: 5, duration: 1 }, 0)
           .to(sceneState.camTarget, { x: 0, y: -0.1, z: 0.5, duration: 1 }, 0)
           .to(sceneState, { uAmp: 0.14, uFreq: 1.2, uRim: 1.0, duration: 1 }, 0)
-      })
+        },
+      )
 
       mm.add('(prefers-reduced-motion: reduce)', () => {
         // shard sits in the hero pose with idle drift only
