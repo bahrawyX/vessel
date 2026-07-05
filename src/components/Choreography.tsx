@@ -15,16 +15,41 @@ if (import.meta.hot) {
 
 const FOV = 35
 const WORK_CAM_Z = 6.2
+const SHARD_R = 1.4 // icosahedron base radius
+/** counter-pan ratio — the ONLY source of work-section cam.x, via camPanX() */
+const K = 0.18
 
 /**
- * Parked column x, computed from the camera frustum so the shard's whole body
- * sits inside one half of the screen at any viewport. halfW is the frustum
- * half-width at the shard plane; 0.52 parks the CENTER 52% toward the edge.
+ * Screen-space solver: the work columns are specified as SCREEN targets and
+ * world values are derived, so placement holds pixel-consistent at every
+ * width. Used by BOTH the desktop scrubbed timeline and the mobile carry.
  */
-function side() {
-  const aspect = window.innerWidth / window.innerHeight
-  const halfW = Math.tan(((FOV / 2) * Math.PI) / 180) * WORK_CAM_Z * aspect
-  return halfW * 0.52
+function halfH() {
+  return Math.tan(((FOV / 2) * Math.PI) / 180) * WORK_CAM_Z // shard parks at z 0
+}
+function halfW() {
+  return halfH() * (window.innerWidth / window.innerHeight)
+}
+/**
+ * Parked scale: silhouette ≈ 52% of half the viewport height everywhere.
+ * The min(halfH, halfW) term shrinks it further on very narrow aspects so
+ * ndcTarget() can keep |NDC x| ≥ ~0.45 without clipping (700px-wide case).
+ */
+function shardScaleFor() {
+  return gsap.utils.clamp(0.55, 0.95, (0.52 * Math.min(halfH(), halfW())) / SHARD_R)
+}
+function radiusNdc() {
+  return (shardScaleFor() * SHARD_R) / halfW()
+}
+/** column center in NDC — auto-retreats on narrow aspects so nothing clips */
+function ndcTarget() {
+  return Math.min(0.6, 0.97 - radiusNdc())
+}
+function sideWorldX(dir: 1 | -1) {
+  return (dir * ndcTarget() * halfW()) / (1 + K)
+}
+function camPanX(dir: 1 | -1) {
+  return -K * sideWorldX(dir)
 }
 
 /**
@@ -68,9 +93,11 @@ export default function Choreography() {
         }).to(sceneState.shard, { rotZ: -Math.PI * 0.5 }, 0)
 
         // ---- studio entry ----
+        // scrub 0.8 < work's smoothing: studio's inertia must never outlast
+        // the work section's writes, or its final values land last and stick
         gsap
           .timeline({
-            scrollTrigger: { trigger: '#studio', start: 'top 95%', end: 'top 15%', scrub: 1.2 },
+            scrollTrigger: { trigger: '#studio', start: 'top 95%', end: 'top 15%', scrub: 0.8 },
             defaults: { ease: 'none' },
           })
           .to(sceneState.shard, { x: 1.6, y: 0, z: 0, scale: 0.85, duration: 1 }, 0)
@@ -100,38 +127,54 @@ export default function Choreography() {
           // into its column.
           work
             // enter: park RIGHT beside IONFIELD
-            .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
-            .to(sceneState.cam, { x: () => -side() * 0.18, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+            .to(sceneState.shard, { x: () => sideWorldX(1), y: 0.05, z: 0, scale: () => shardScaleFor(), duration: 0.6 }, 0)
+            .to(sceneState.cam, { x: () => camPanX(1), y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
             .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 0.6 }, 0)
             .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
+            // full-span camera/uniform holds: keep re-asserting these every
+            // rendered tick so a late smoothed write from a neighbouring
+            // section can never stick (the studio→work camTarget race)
+            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 6.2 }, 0.6)
+            .to(sceneState.cam, { y: 0, z: WORK_CAM_Z, duration: 6.2 }, 0.6)
+            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, duration: 6.2 }, 0.6)
+            // cam.x holds cover the gaps between the two crossing pan tweens
+            .to(sceneState.cam, { x: () => camPanX(1), duration: 1 }, 0.6)
+            .to(sceneState.cam, { x: () => camPanX(-1), duration: 1 }, 3.2)
+            .to(sceneState.cam, { x: () => camPanX(1), duration: 1 }, 5.8)
             // hold 1 — explicit hold keeps playhead ownership
-            .to(sceneState.shard, { x: () => side(), duration: 1 }, 0.6)
+            .to(sceneState.shard, { x: () => sideWorldX(1), duration: 1 }, 0.6)
             // crossing 1: rise-flip-carry to the LEFT (full 360° across the carry)
-            .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 1.6)
+            .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: () => shardScaleFor() * 1.15, rotY: '+=' + Math.PI, duration: 0.8 }, 1.6)
             .to(sceneState, { uRim: 0.7, duration: 0.8 }, 1.6)
-            .to(sceneState.cam, { x: () => side() * 0.18, duration: 1.6 }, 1.6)
-            .to(sceneState.shard, { x: () => -side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 2.4)
+            .to(sceneState.cam, { x: () => camPanX(-1), duration: 1.6 }, 1.6)
+            .to(sceneState.shard, { x: () => sideWorldX(-1), y: 0.05, z: 0, scale: () => shardScaleFor(), rotY: '+=' + Math.PI, duration: 0.8 }, 2.4)
             .to(sceneState, { uRim: 0.25, duration: 0.8 }, 2.4)
             // hold 2 — LEFT beside HALFTONE
-            .to(sceneState.shard, { x: () => -side(), duration: 1 }, 3.2)
+            .to(sceneState.shard, { x: () => sideWorldX(-1), duration: 1 }, 3.2)
             // crossing 2: carry back RIGHT
-            .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 4.2)
+            .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: () => shardScaleFor() * 1.15, rotY: '+=' + Math.PI, duration: 0.8 }, 4.2)
             .to(sceneState, { uRim: 0.7, duration: 0.8 }, 4.2)
-            .to(sceneState.cam, { x: () => -side() * 0.18, duration: 1.6 }, 4.2)
-            .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 5)
+            .to(sceneState.cam, { x: () => camPanX(1), duration: 1.6 }, 4.2)
+            .to(sceneState.shard, { x: () => sideWorldX(1), y: 0.05, z: 0, scale: () => shardScaleFor(), rotY: '+=' + Math.PI, duration: 0.8 }, 5)
             .to(sceneState, { uRim: 0.25, duration: 0.8 }, 5)
             // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
-            .to(sceneState.shard, { x: () => side(), duration: 1 }, 5.8)
+            .to(sceneState.shard, { x: () => sideWorldX(1), duration: 1 }, 5.8)
         } else {
           // SMALL SCREENS: scroll selects the state; time animates the carry.
           // The scrubbed timeline keeps ONLY the section entry (drift to the
           // first side) plus a filler so the entry occupies the same fraction
           // of the span — crossings are owned by goToSide() below.
           work
-            .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
-            .to(sceneState.cam, { x: () => -side() * 0.18, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+            .to(sceneState.shard, { x: () => sideWorldX(1), y: 0.05, z: 0, scale: () => shardScaleFor(), duration: 0.6 }, 0)
+            .to(sceneState.cam, { x: () => camPanX(1), y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
             .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 0.6 }, 0)
             .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
+            // full-span holds (see desktop branch): the section owns its
+            // camera aim/height and uniforms while you're inside it.
+            // cam.x is NOT held here — the time-based carry owns it.
+            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 6.2 }, 0.6)
+            .to(sceneState.cam, { y: 0, z: WORK_CAM_Z, duration: 6.2 }, 0.6)
+            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, duration: 6.2 }, 0.6)
             .to({ v: 0 }, { v: 1, duration: 6.2 }, 0.6)
 
           // time-based carry: ~0.9s regardless of how violently the user flicks.
@@ -143,17 +186,17 @@ export default function Choreography() {
               x: 0,
               y: 0.7,
               z: 0.4,
-              scale: 0.9,
+              scale: () => shardScaleFor() * 1.12,
               rotY: '+=' + Math.PI,
               duration: 0.45,
               ease: 'power2.in',
               overwrite: 'auto',
             })
               .to(sceneState.shard, {
-                x: () => side() * dir,
+                x: () => sideWorldX(dir),
                 y: 0.05,
                 z: 0,
-                scale: 0.8,
+                scale: () => shardScaleFor(),
                 rotY: '+=' + Math.PI,
                 duration: 0.45,
                 ease: 'power2.out',
@@ -163,7 +206,7 @@ export default function Choreography() {
               .to(sceneState, { uRim: 0.25, duration: 0.45, overwrite: 'auto' }, 0.45)
               .to(
                 sceneState.cam,
-                { x: () => -dir * side() * 0.18, duration: 0.9, ease: 'power2.inOut', overwrite: 'auto' },
+                { x: () => camPanX(dir), duration: 0.9, ease: 'power2.inOut', overwrite: 'auto' },
                 0,
               )
             return tl
