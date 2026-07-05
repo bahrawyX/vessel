@@ -45,10 +45,10 @@ export default function Choreography() {
         },
         (ctx) => {
         if (!ctx.conditions?.noPref) return
-        // small screens compress the scroll span — tighter scrub tracking
-        // keeps a fast flick from replaying a whole crossing as a whip.
-        // The choreography itself is identical at every width.
-        const workScrub = ctx.conditions?.small ? 0.6 : 1
+        // Below 1024px a single wheel flick can cover more scroll than an
+        // entire crossing span, so ANY scrub replays the crossing as a whip.
+        // There, scroll SELECTS the side and time ANIMATES the carry.
+        const small = !!ctx.conditions?.small
         // ---- master: progress readout + slow rotZ tumble (rotZ ONLY) ----
         gsap.timeline({
           scrollTrigger: {
@@ -78,48 +78,109 @@ export default function Choreography() {
           .to(sceneState.camTarget, { x: 1.6, y: 0, z: 0, duration: 1 }, 0)
           .to(sceneState, { uAmp: 0.1, uFreq: 2.4, uRim: 0.3, duration: 1 }, 0)
 
-        // ---- WORK: one timeline owns the shard for the whole section ----
+        // ---- WORK ----
         const work = gsap.timeline({
           scrollTrigger: {
             trigger: '#work',
             start: 'top 70%',
             end: 'bottom 60%',
-            scrub: workScrub,
+            scrub: small ? 0.6 : 1,
             invalidateOnRefresh: true,
           },
           defaults: { ease: 'none' },
         })
 
-        // Explicit positions: enter [0-0.6], hold1 [0.6-1.6], cross1 [1.6-3.2],
-        // hold2 [3.2-4.2], cross2 [4.2-5.8], hold3 [5.8-6.8].
-        // camTarget is PINNED at center for the whole section — the camera must
-        // not look at the shard here or it re-centers it and kills the columns.
-        // cam.x counter-pans slightly opposite the shard to push it deeper
-        // into its column.
-        work
-          // enter: park RIGHT beside IONFIELD
-          .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
-          .to(sceneState.cam, { x: () => -side() * 0.18, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
-          .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 0.6 }, 0)
-          .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
-          // hold 1 — explicit hold keeps playhead ownership
-          .to(sceneState.shard, { x: () => side(), duration: 1 }, 0.6)
-          // crossing 1: rise-flip-carry to the LEFT (full 360° across the carry)
-          .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 1.6)
-          .to(sceneState, { uRim: 0.7, duration: 0.8 }, 1.6)
-          .to(sceneState.cam, { x: () => side() * 0.18, duration: 1.6 }, 1.6)
-          .to(sceneState.shard, { x: () => -side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 2.4)
-          .to(sceneState, { uRim: 0.25, duration: 0.8 }, 2.4)
-          // hold 2 — LEFT beside HALFTONE
-          .to(sceneState.shard, { x: () => -side(), duration: 1 }, 3.2)
-          // crossing 2: carry back RIGHT
-          .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 4.2)
-          .to(sceneState, { uRim: 0.7, duration: 0.8 }, 4.2)
-          .to(sceneState.cam, { x: () => -side() * 0.18, duration: 1.6 }, 4.2)
-          .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 5)
-          .to(sceneState, { uRim: 0.25, duration: 0.8 }, 5)
-          // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
-          .to(sceneState.shard, { x: () => side(), duration: 1 }, 5.8)
+        if (!small) {
+          // DESKTOP: one scrubbed timeline owns the whole journey.
+          // Explicit positions: enter [0-0.6], hold1 [0.6-1.6], cross1 [1.6-3.2],
+          // hold2 [3.2-4.2], cross2 [4.2-5.8], hold3 [5.8-6.8].
+          // camTarget is PINNED at center for the whole section — the camera must
+          // not look at the shard here or it re-centers it and kills the columns.
+          // cam.x counter-pans slightly opposite the shard to push it deeper
+          // into its column.
+          work
+            // enter: park RIGHT beside IONFIELD
+            .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
+            .to(sceneState.cam, { x: () => -side() * 0.18, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 0.6 }, 0)
+            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
+            // hold 1 — explicit hold keeps playhead ownership
+            .to(sceneState.shard, { x: () => side(), duration: 1 }, 0.6)
+            // crossing 1: rise-flip-carry to the LEFT (full 360° across the carry)
+            .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 1.6)
+            .to(sceneState, { uRim: 0.7, duration: 0.8 }, 1.6)
+            .to(sceneState.cam, { x: () => side() * 0.18, duration: 1.6 }, 1.6)
+            .to(sceneState.shard, { x: () => -side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 2.4)
+            .to(sceneState, { uRim: 0.25, duration: 0.8 }, 2.4)
+            // hold 2 — LEFT beside HALFTONE
+            .to(sceneState.shard, { x: () => -side(), duration: 1 }, 3.2)
+            // crossing 2: carry back RIGHT
+            .to(sceneState.shard, { x: 0, y: 0.95, z: 0.6, scale: 0.94, rotY: '+=' + Math.PI, duration: 0.8 }, 4.2)
+            .to(sceneState, { uRim: 0.7, duration: 0.8 }, 4.2)
+            .to(sceneState.cam, { x: () => -side() * 0.18, duration: 1.6 }, 4.2)
+            .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, rotY: '+=' + Math.PI, duration: 0.8 }, 5)
+            .to(sceneState, { uRim: 0.25, duration: 0.8 }, 5)
+            // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
+            .to(sceneState.shard, { x: () => side(), duration: 1 }, 5.8)
+        } else {
+          // SMALL SCREENS: scroll selects the state; time animates the carry.
+          // The scrubbed timeline keeps ONLY the section entry (drift to the
+          // first side) plus a filler so the entry occupies the same fraction
+          // of the span — crossings are owned by goToSide() below.
+          work
+            .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
+            .to(sceneState.cam, { x: () => -side() * 0.18, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 0.6 }, 0)
+            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
+            .to({ v: 0 }, { v: 1, duration: 6.2 }, 0.6)
+
+          // time-based carry: ~0.9s regardless of how violently the user flicks.
+          // overwrite: 'auto' lets a rapid direction flip kill the in-flight
+          // carry cleanly instead of stacking tweens.
+          const goToSide = (dir: 1 | -1) => {
+            const tl = gsap.timeline()
+            tl.to(sceneState.shard, {
+              x: 0,
+              y: 0.7,
+              z: 0.4,
+              scale: 0.9,
+              rotY: '+=' + Math.PI,
+              duration: 0.45,
+              ease: 'power2.in',
+              overwrite: 'auto',
+            })
+              .to(sceneState.shard, {
+                x: () => side() * dir,
+                y: 0.05,
+                z: 0,
+                scale: 0.8,
+                rotY: '+=' + Math.PI,
+                duration: 0.45,
+                ease: 'power2.out',
+                overwrite: 'auto',
+              })
+              .to(sceneState, { uRim: 0.7, duration: 0.45, overwrite: 'auto' }, 0)
+              .to(sceneState, { uRim: 0.25, duration: 0.45, overwrite: 'auto' }, 0.45)
+              .to(
+                sceneState.cam,
+                { x: () => -dir * side() * 0.18, duration: 0.9, ease: 'power2.inOut', overwrite: 'auto' },
+                0,
+              )
+            return tl
+          }
+
+          // scroll only SELECTS which side; callbacks fire once per boundary
+          const rows = gsap.utils.toArray<HTMLElement>('[data-wrow]')
+          const sides: Array<1 | -1> = [1, -1, 1]
+          ;[1, 2].forEach((i) => {
+            ScrollTrigger.create({
+              trigger: rows[i],
+              start: 'top 55%',
+              onEnter: () => goToSide(sides[i]),
+              onLeaveBack: () => goToSide(sides[i - 1]),
+            })
+          })
+        }
 
         // ---- process: THE PEAK. Pure .to() from live values; range starts
         // exactly where the work timeline ends — zero unowned pixels. ----

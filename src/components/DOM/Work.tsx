@@ -34,6 +34,30 @@ const PROJECTS = [
 export default function Work() {
   const rootRef = useRef<HTMLElement>(null)
 
+  // one refresh once every video knows its dimensions — no layout-shifting
+  // load may move trigger positions mid-scroll (aspect boxes prevent shifts,
+  // this is belt-and-suspenders for trigger math)
+  useEffect(() => {
+    const videos = Array.from(
+      rootRef.current?.querySelectorAll<HTMLVideoElement>('video') ?? [],
+    )
+    if (!videos.length) return
+    let pending = videos.filter((v) => v.readyState < 1).length
+    if (pending === 0) return
+    let cancelled = false
+    const onLoaded = () => {
+      pending -= 1
+      if (pending === 0 && !cancelled) ScrollTrigger.refresh()
+    }
+    videos.forEach((v) => {
+      if (v.readyState < 1) v.addEventListener('loadedmetadata', onLoaded, { once: true })
+    })
+    return () => {
+      cancelled = true
+      videos.forEach((v) => v.removeEventListener('loadedmetadata', onLoaded))
+    }
+  }, [])
+
   useEffect(() => {
     const ctx = gsap.context(() => {
       const mm = gsap.matchMedia()
