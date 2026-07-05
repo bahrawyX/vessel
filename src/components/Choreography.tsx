@@ -41,13 +41,13 @@ export default function Choreography() {
       mm.add(
         {
           noPref: '(prefers-reduced-motion: no-preference)',
-          small: '(max-width: 1023px)',
+          small: '(max-width: 1439px)',
         },
         (ctx) => {
         if (!ctx.conditions?.noPref) return
-        // Below 1024px a single wheel flick can cover more scroll than an
-        // entire crossing span, so ANY scrub replays the crossing as a whip.
-        // There, scroll SELECTS the side and time ANIMATES the carry.
+        // Laptop-and-smaller screens: no side crossings at all — the shard
+        // holds center stage through the work section. Only large desktops
+        // get the side-swap choreography.
         const small = !!ctx.conditions?.small
         // ---- master: progress readout + slow rotZ tumble (rotZ ONLY) ----
         gsap.timeline({
@@ -123,63 +123,15 @@ export default function Choreography() {
             // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
             .to(sceneState.shard, { x: () => side(), duration: 1 }, 5.8)
         } else {
-          // SMALL SCREENS: scroll selects the state; time animates the carry.
-          // The scrubbed timeline keeps ONLY the section entry (drift to the
-          // first side) plus a filler so the entry occupies the same fraction
-          // of the span — crossings are owned by goToSide() below.
+          // LAPTOP AND SMALLER: no crossings — the shard drifts to center
+          // stage and simply holds there for the whole work section, with a
+          // slow full turn across the span. Calm, whip-proof by construction.
           work
-            .to(sceneState.shard, { x: () => side(), y: 0.05, z: 0, scale: 0.8, duration: 0.6 }, 0)
-            .to(sceneState.cam, { x: () => -side() * 0.18, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
+            .to(sceneState.shard, { x: 0, y: 0.05, z: -0.4, scale: 0.75, duration: 0.6 }, 0)
+            .to(sceneState.cam, { x: 0, y: 0, z: WORK_CAM_Z, duration: 0.6 }, 0)
             .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 0.6 }, 0)
             .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
-            .to({ v: 0 }, { v: 1, duration: 6.2 }, 0.6)
-
-          // time-based carry: ~0.9s regardless of how violently the user flicks.
-          // overwrite: 'auto' lets a rapid direction flip kill the in-flight
-          // carry cleanly instead of stacking tweens.
-          const goToSide = (dir: 1 | -1) => {
-            const tl = gsap.timeline()
-            tl.to(sceneState.shard, {
-              x: 0,
-              y: 0.7,
-              z: 0.4,
-              scale: 0.9,
-              rotY: '+=' + Math.PI,
-              duration: 0.45,
-              ease: 'power2.in',
-              overwrite: 'auto',
-            })
-              .to(sceneState.shard, {
-                x: () => side() * dir,
-                y: 0.05,
-                z: 0,
-                scale: 0.8,
-                rotY: '+=' + Math.PI,
-                duration: 0.45,
-                ease: 'power2.out',
-                overwrite: 'auto',
-              })
-              .to(sceneState, { uRim: 0.7, duration: 0.45, overwrite: 'auto' }, 0)
-              .to(sceneState, { uRim: 0.25, duration: 0.45, overwrite: 'auto' }, 0.45)
-              .to(
-                sceneState.cam,
-                { x: () => -dir * side() * 0.18, duration: 0.9, ease: 'power2.inOut', overwrite: 'auto' },
-                0,
-              )
-            return tl
-          }
-
-          // scroll only SELECTS which side; callbacks fire once per boundary
-          const rows = gsap.utils.toArray<HTMLElement>('[data-wrow]')
-          const sides: Array<1 | -1> = [1, -1, 1]
-          ;[1, 2].forEach((i) => {
-            ScrollTrigger.create({
-              trigger: rows[i],
-              start: 'top 55%',
-              onEnter: () => goToSide(sides[i]),
-              onLeaveBack: () => goToSide(sides[i - 1]),
-            })
-          })
+            .to(sceneState.shard, { rotY: '+=' + Math.PI * 2, duration: 6.2, ease: 'none' }, 0.6)
         }
 
         // ---- process: THE PEAK. Pure .to() from live values; range starts
