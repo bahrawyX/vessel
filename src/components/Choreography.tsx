@@ -133,14 +133,15 @@ export default function Choreography() {
             .to(sceneState, { uAmp: 0.07, uFreq: 2.4, uRim: 0.25, duration: 0.6 }, 0)
             // full-span camera/uniform holds: keep re-asserting these every
             // rendered tick so a late smoothed write from a neighbouring
-            // section can never stick (the studio→work camTarget race)
-            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 6.2 }, 0.6)
-            .to(sceneState.cam, { y: 0, z: WORK_CAM_Z, duration: 6.2 }, 0.6)
-            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, duration: 6.2 }, 0.6)
+            // section can never stick (the studio→work camTarget race).
+            // They stop at 6.3 — the return leg owns the last half-unit.
+            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 5.7 }, 0.6)
+            .to(sceneState.cam, { y: 0, z: WORK_CAM_Z, duration: 5.7 }, 0.6)
+            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, duration: 5.7 }, 0.6)
             // cam.x holds cover the gaps between the two crossing pan tweens
             .to(sceneState.cam, { x: () => camPanX(1), duration: 1 }, 0.6)
             .to(sceneState.cam, { x: () => camPanX(-1), duration: 1 }, 3.2)
-            .to(sceneState.cam, { x: () => camPanX(1), duration: 1 }, 5.8)
+            .to(sceneState.cam, { x: () => camPanX(1), duration: 0.5 }, 5.8)
             // hold 1 — explicit hold keeps playhead ownership
             .to(sceneState.shard, { x: () => sideWorldX(1), duration: 1 }, 0.6)
             // crossing 1: rise-flip-carry to the LEFT (full 360° across the carry)
@@ -157,8 +158,15 @@ export default function Choreography() {
             .to(sceneState.cam, { x: () => camPanX(1), duration: 1.6 }, 4.2)
             .to(sceneState.shard, { x: () => sideWorldX(1), y: 0.05, z: 0, scale: () => shardScaleFor(), rotY: '+=' + Math.PI, duration: 0.8 }, 5)
             .to(sceneState, { uRim: 0.25, duration: 0.8 }, 5)
-            // hold 3 — RIGHT beside DEEP CURRENT, clean handoff to process
-            .to(sceneState.shard, { x: () => sideWorldX(1), duration: 1 }, 5.8)
+            // hold 3 — RIGHT beside DEEP CURRENT
+            .to(sceneState.shard, { x: () => sideWorldX(1), duration: 0.5 }, 5.8)
+            // return leg [6.3-6.8]: carry most of the way back to center while
+            // still inside the work range, so the process shot receives the
+            // shard nearly home instead of starting the centering itself late
+            .to(sceneState.shard, { x: 0, y: 0.15, z: 0.1, scale: () => shardScaleFor() * 1.05, rotY: '+=' + Math.PI * 0.5, duration: 0.5 }, 6.3)
+            .to(sceneState.cam, { x: 0, y: 0.5, z: 5.6, duration: 0.5 }, 6.3)
+            .to(sceneState.camTarget, { y: 0.1, duration: 0.5 }, 6.3)
+            .to(sceneState, { uAmp: 0.25, uFreq: 2.8, uRim: 0.4, duration: 0.5 }, 6.3)
         } else {
           // SMALL SCREENS: scroll selects the state; time animates the carry.
           // The scrubbed timeline keeps ONLY the section entry (drift to the
@@ -172,10 +180,16 @@ export default function Choreography() {
             // full-span holds (see desktop branch): the section owns its
             // camera aim/height and uniforms while you're inside it.
             // cam.x is NOT held here — the time-based carry owns it.
-            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 6.2 }, 0.6)
-            .to(sceneState.cam, { y: 0, z: WORK_CAM_Z, duration: 6.2 }, 0.6)
-            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, duration: 6.2 }, 0.6)
+            .to(sceneState.camTarget, { x: 0, y: 0.15, z: 0, duration: 5.7 }, 0.6)
+            .to(sceneState.cam, { y: 0, z: WORK_CAM_Z, duration: 5.7 }, 0.6)
+            .to(sceneState, { uAmp: 0.07, uFreq: 2.4, duration: 5.7 }, 0.6)
             .to({ v: 0 }, { v: 1, duration: 6.2 }, 0.6)
+            // return leg [6.3-6.8]: bring the shard home before the process
+            // handoff (starts from the live parked side via pure .to)
+            .to(sceneState.shard, { x: 0, y: 0.15, z: 0.1, scale: () => shardScaleFor() * 1.05, duration: 0.5 }, 6.3)
+            .to(sceneState.cam, { x: 0, y: 0.5, z: 5.6, duration: 0.5 }, 6.3)
+            .to(sceneState.camTarget, { y: 0.1, duration: 0.5 }, 6.3)
+            .to(sceneState, { uAmp: 0.25, uFreq: 2.8, uRim: 0.4, duration: 0.5 }, 6.3)
 
           // time-based carry: ~0.9s regardless of how violently the user flicks.
           // overwrite: 'auto' lets a rapid direction flip kill the in-flight
@@ -234,7 +248,9 @@ export default function Choreography() {
               trigger: '#process',
               start: () => workST.end,
               end: () => workST.end + window.innerHeight * 0.8,
-              scrub: 1.2,
+              // 1.0 tracks tighter than the old 1.2 (less arrival lag) while
+              // staying >= work's smoothing so work's last write can't stick
+              scrub: 1.0,
               invalidateOnRefresh: true,
             },
             defaults: { ease: 'none' },
